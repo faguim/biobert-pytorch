@@ -92,6 +92,17 @@ class DataTrainingArguments:
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
     )
 
+    # per_device_eval_batch_size: int = field(
+    #     default=4, metadata={"help": "Overwrite the cached training and evaluation sets"}
+    # )
+    block_size: int = field(
+        default=128,
+        metadata={
+            "help": "The maximum total input sequence length after tokenization. Sequences longer "
+            "than this will be truncated, sequences shorter will be padded."
+        },
+    )
+
 
 def check_overwrite_output_dir(training_args):
     if (
@@ -134,6 +145,7 @@ def main():
         training_args.n_gpu,
         bool(training_args.local_rank != -1),
         training_args.fp16,
+        # training_args.per_device_eval_batch_size
     )
     logger.info("Training/evaluation parameters %s", training_args)
 
@@ -141,7 +153,11 @@ def main():
     set_seed(training_args.seed)
 
     # Prepare CONLL-2003 task
+    print(data_args.labels)
     labels = get_labels(data_args.labels)
+
+    print(labels)
+
     label_map: Dict[int, str] = {i: label for i, label in enumerate(labels)}
     print(label_map)
     num_labels = len(labels)
@@ -158,6 +174,7 @@ def main():
         id2label=label_map,
         label2id={label: i for i, label in enumerate(labels)},
         cache_dir=model_args.cache_dir,
+        # block_size=128
     )
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
@@ -212,6 +229,9 @@ def main():
             for j in range(seq_len):
                 if label_ids[i, j] != nn.CrossEntropyLoss().ignore_index:
                     out_label_list[i].append(label_map[label_ids[i][j]])
+                    # print('--------------------------------------------------preds')
+                    # print(preds)
+                    # print(preds[i][j])
                     preds_list[i].append(label_map[preds[i][j]])
 
         return preds_list, out_label_list
@@ -238,6 +258,8 @@ def main():
     if training_args.do_train:
         print(model_args)
         print(training_args)
+        # trainer.resize_token_embeddings(len(tokenizer))
+
         trainer.train(
             model_path=model_args.model_name_or_path if os.path.isdir(model_args.model_name_or_path) else None
         )
@@ -281,16 +303,18 @@ def main():
 
         predictions, label_ids, metrics = trainer.predict(test_dataset)
         # print('predictions ' + str(predictions))
+        preds_soft = np.argmax(predictions, axis=2)
+        print('preds_soft ', preds_soft)
         preds_list, _ = align_predictions(predictions, label_ids)
-        # print(preds_list)
+        print('preds_listttttttttttttttttttttttttttttttttt ', preds_list)
         # Save predictions
-        output_test_results_file = os.path.join(training_args.output_dir, "test_results.txt")
-        # if trainer.is_world_master():
-        with open(output_test_results_file, "w") as writer:
-            logger.info("***** Test results *****")
-            for key, value in metrics.items():
-                logger.info("  %s = %s", key, value)
-                writer.write("%s = %s\n" % (key, value))
+        # output_test_results_file = os.path.join(training_args.output_dir, "test_results.txt")
+        # # if trainer.is_world_master():
+        # with open(output_test_results_file, "w") as writer:
+        #     logger.info("***** Test results *****")
+        #     for key, value in metrics.items():
+        #         logger.info("  %s = %s", key, value)
+        #         writer.write("%s = %s\n" % (key, value))
 
 
         output_test_predictions_file = os.path.join(training_args.output_dir, "test_predictions.txt")
@@ -298,18 +322,25 @@ def main():
         with open(output_test_predictions_file, "w") as writer:
             with open(os.path.join(data_args.data_dir, "test.txt"), "r") as f:
                 example_id = 0
+
                 for line in f:
+                    # print('line ', line)
                     if line.startswith("-DOCSTART-") or line == "" or line == "\n":
                         writer.write(line)
                         if not preds_list[example_id]:
                             example_id += 1
                     elif preds_list[example_id]:
+                        print('preds_list ', preds_list)
+
                         entity_label = preds_list[example_id].pop(0)
-                        if entity_label == 'O':
-                            output_line = line.split()[0] + " " + entity_label + "\n"
-                        else:
-                            output_line = line.split()[0] + " " + entity_label[0] + "\n"
+                        print('entity_label ',entity_label)
+                        output_line = line.split()[0] + " " + entity_label + "\n"
+                        # if entity_label == 'O':
+                        #     output_line = line.split()[0] + " " + entity_label + "\n"
+                        # else:
+                        #     output_line = line.split()[0] + " " + entity_label[0] + "\n"
                         # output_line = line.split()[0] + " " + preds_list[example_id].pop(0) + "\n"
+                        print(output_line)
                         writer.write(output_line)
                     else:
                         logger.warning(

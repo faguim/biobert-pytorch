@@ -93,6 +93,8 @@ if is_torch_available():
             overwrite_cache=False,
             mode: Split = Split.train,
         ):
+            # data_dir = '../datasets/NER' + data_dir
+            # print('data_dir: ',data_dir)
             # Load data features from cache or dataset file
             cached_features_file = os.path.join(
                 data_dir, "cached_{}_{}_{}".format(mode.value, tokenizer.__class__.__name__, str(max_seq_length)),
@@ -392,6 +394,8 @@ def convert_examples_to_features(
 
 
 def get_labels(path: str) -> List[str]:
+    # print(path)
+    # print()
     if path:
         with open(path, "r") as f:
             labels = f.read().splitlines()

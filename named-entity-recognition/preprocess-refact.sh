@@ -1,7 +1,7 @@
 
 #!/bin/bash
 # ENTITIES="NCBI-disease AnatEM-IOB AnatEM-BC5CDR enzo_work"
-ENTITIES="NCBI-disease AnatEM-BC5CDR"
+ENTITIES="AnatEM-BC5CDR"
 
 MAX_LENGTH=128
 
