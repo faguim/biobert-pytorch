@@ -180,6 +180,7 @@ def main():
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_fast=model_args.use_fast,
+        do_lower_case=False
     )
     model = AutoModelForTokenClassification.from_pretrained(
         model_args.model_name_or_path,
@@ -219,7 +220,7 @@ def main():
 
     def align_predictions(predictions: np.ndarray, label_ids: np.ndarray) -> Tuple[List[int], List[int]]:
         preds = np.argmax(predictions, axis=2)
-
+        # print('segundo soft ', preds)
         batch_size, seq_len = preds.shape
 
         out_label_list = [[] for _ in range(batch_size)]
@@ -227,12 +228,16 @@ def main():
 
         for i in range(batch_size):
             for j in range(seq_len):
+                # print(str('label_ids['+ str(i)+', '+ str(j) +'] '), label_ids[i, j])
+                # print(nn.CrossEntropyLoss().ignore_index)
                 if label_ids[i, j] != nn.CrossEntropyLoss().ignore_index:
                     out_label_list[i].append(label_map[label_ids[i][j]])
+                    # print(label_map[label_ids[i][j]])
                     # print('--------------------------------------------------preds')
-                    # print(preds)
+
                     # print(preds[i][j])
                     preds_list[i].append(label_map[preds[i][j]])
+                else: out_label_list[i].append('O')
 
         return preds_list, out_label_list
 
@@ -251,13 +256,14 @@ def main():
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
+# talvez comentar isto se der erro
         compute_metrics=compute_metrics,
     )
 
     # Training
     if training_args.do_train:
-        print(model_args)
-        print(training_args)
+        # print(model_args)
+        # print(training_args)
         # trainer.resize_token_embeddings(len(tokenizer))
 
         trainer.train(
@@ -304,9 +310,9 @@ def main():
         predictions, label_ids, metrics = trainer.predict(test_dataset)
         # print('predictions ' + str(predictions))
         preds_soft = np.argmax(predictions, axis=2)
-        print('preds_soft ', preds_soft)
+        # print('preds_soft ', preds_soft)
         preds_list, _ = align_predictions(predictions, label_ids)
-        print('preds_listttttttttttttttttttttttttttttttttt ', preds_list)
+        # print('preds_listttttttttttttttttttttttttttttttttt ', preds_list)
         # Save predictions
         # output_test_results_file = os.path.join(training_args.output_dir, "test_results.txt")
         # # if trainer.is_world_master():
@@ -330,17 +336,17 @@ def main():
                         if not preds_list[example_id]:
                             example_id += 1
                     elif preds_list[example_id]:
-                        print('preds_list ', preds_list)
+                        # print('preds_list ', preds_list)
 
                         entity_label = preds_list[example_id].pop(0)
-                        print('entity_label ',entity_label)
+                        # print('entity_label ',entity_label)
                         output_line = line.split()[0] + " " + entity_label + "\n"
                         # if entity_label == 'O':
                         #     output_line = line.split()[0] + " " + entity_label + "\n"
                         # else:
                         #     output_line = line.split()[0] + " " + entity_label[0] + "\n"
                         # output_line = line.split()[0] + " " + preds_list[example_id].pop(0) + "\n"
-                        print(output_line)
+                        # print(output_line)
                         writer.write(output_line)
                     else:
                         logger.warning(

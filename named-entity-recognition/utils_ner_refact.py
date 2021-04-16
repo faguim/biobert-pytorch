@@ -111,6 +111,8 @@ if is_torch_available():
                 else:
                     logger.info(f"Creating features from dataset file at {data_dir}")
                     examples = read_examples_from_file(data_dir, mode)
+                    # print('-------------------------------------')
+                    # print(examples[0])
                     # TODO clean up all this to leverage built-in features of tokenizers
                     self.features = convert_examples_to_features(
                         examples,
