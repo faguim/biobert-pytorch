@@ -40,7 +40,8 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from utils_ner_refact import NerDataset, Split, get_labels
+from utils_ner_refact import NerDataset, Split, get_labels, TrainerWithLog
+
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +214,7 @@ def main():
             max_seq_length=data_args.max_seq_length,
             overwrite_cache=data_args.overwrite_cache,
             mode=Split.dev,
+            # sentences = []
         )
         if training_args.do_eval
         else None
@@ -237,12 +239,26 @@ def main():
 
                     # print(preds[i][j])
                     preds_list[i].append(label_map[preds[i][j]])
-                else: out_label_list[i].append('O')
+                else:
+                    out_label_list[i].append('O')
+                    preds_list[i].append('O')
+
+        # print('-------------------------------------------------')
+        # print(type(out_label_list))
+        # print(type(preds_list))
+
+        # print('out_label_list[0] ',out_label_list[0])
+        # print('preds_list[0] ', preds_list[0])
 
         return preds_list, out_label_list
 
+
     def compute_metrics(p: EvalPrediction) -> Dict:
         preds_list, out_label_list = align_predictions(p.predictions, p.label_ids)
+        # print('p.predictions ', len(p.predictions[0]))
+        # print('p.label_ids ', len(p.label_ids[0]))
+        print('len(label_ids)', len(preds_list))
+        print('len(predictions) ', len(out_label_list))
 
         return {
             "precision": precision_score(out_label_list, preds_list),
@@ -251,14 +267,19 @@ def main():
         }
 
     # Initialize our Trainer
-    trainer = Trainer(
+    trainer = TrainerWithLog(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
 # talvez comentar isto se der erro
         compute_metrics=compute_metrics,
+        model_init=model
+        # log = 'test'
     )
+    # trainer._memory_tracker.start()
+
+    
 
     # Training
     if training_args.do_train:
