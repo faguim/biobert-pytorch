@@ -27,13 +27,15 @@ from typing import List, Optional, Union
 from filelock import FileLock
 
 from transformers.integrations import default_hp_search_backend
-
+# from transformers.integrations import TensorBoardCallback
 from transformers import AutoModelForTokenClassification, PreTrainedTokenizer, is_tf_available, is_torch_available, Trainer, TrainingArguments, EvalPrediction
 
 logger = logging.getLogger(__name__)
 
 from typing import Dict
 from transformers.trainer_utils import TrainerMemoryTracker
+# from transformers import finetuning_utils
+
 
 @dataclass
 class InputExample:
@@ -144,61 +146,43 @@ class NerDataset(Dataset):
 
 @dataclass
 class TrainerWithLog(Trainer):
-    # tracker = TrainerMemoryTracker
     def __init__(
-
-    # labels: Optional[str] = field(
-    #     default=None,
-    #     metadata={"help": "Path to a file containing all labels. If not specified, CoNLL-2003 labels are used."},
-    # )
-
         self,
         model: AutoModelForTokenClassification,
         args: TrainingArguments,
         train_dataset: NerDataset,
         eval_dataset: NerDataset,
-        model_init: AutoModelForTokenClassification,
         # # talvez comentar isto se der erro
-        compute_metrics: Optional[EvalPrediction] ,
+
+        # model_init: Callable[[], PreTrainedModel] = None,
+        compute_metrics: Optional[EvalPrediction],
+        # model_init: Optional[AutoModelForTokenClassification],
+
         # hp_search_backend:  Optional[str],
-        hp_search_backend:  Optional[TrainerMemoryTracker]= field(
-            default=None,
-            metadata={"help": "."},
-        ),
-        _memory_tracker:  Optional[TrainerMemoryTracker]= field(
-            default=None,
-            metadata={"help": "."},
-        ),
-
-# labels: Optional[str] = field(
-#     default=None,
-#     metadata={"help": "Path to a file containing all labels. If not specified, CoNLL-2003 labels are used."},
-
-        # log: Optional[str],
-
-        # tokenizer: PreTrainedTokenizer,
-        # labels: List[str],
-        # model_type: str,
-        # max_seq_length: Optional[int] = None,
-        # overwrite_cache=False,
-        # mode: Split = Split.train,
-        # sentences: List[List[str]] = None
+        # hp_search_backend:  Optional[TrainerMemoryTracker]= field(
+        #     default=None,
+        #     metadata={"help": "."},
+        # ),
+        # _memory_tracker:  Optional[TrainerMemoryTracker]= field(
+        #     default=None,
+        #     metadata={"help": "."},
+        # ),
     ):
-        # print('ok')
-        # print(args)
+        print()
+        # self.model_init = finetuning_utils.model_init
+
+        self.model = model
+        self.model_init = self.model
+
         # _memory_tracker = TrainerMemoryTracker()
         # print(_memory_tracker.skip_memory_metrics)
-        # self._memory_tracker = args.skip_memory_metrics
+        self._memory_tracker = args.skip_memory_metrics
         self._memory_tracker = TrainerMemoryTracker(args.skip_memory_metrics)
-
         self._memory_tracker.start()
 
-        # print(self._memory_tracker)
-
         self.hp_search_backend = default_hp_search_backend()
-        self.model = model
-        print(self.model)
 
+        self.args = args
 
 
     def log(self, logs: Dict[str, float]) -> None:
@@ -371,7 +355,6 @@ def convert_examples_to_features(
 
 
 def get_labels(path: str) -> List[str]:
-    # print(path)
     # print()
     if path:
         with open(path, "r") as f:

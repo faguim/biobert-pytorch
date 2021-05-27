@@ -1,0 +1,5 @@
+datasets/
+
+named-entity-recognition/output/
+named-entity-recognition/runs/
+named-entity-recognition/__pycache__/

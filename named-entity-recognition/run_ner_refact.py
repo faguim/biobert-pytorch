@@ -26,7 +26,9 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-from seqeval.metrics import f1_score, precision_score, recall_score
+from seqeval.metrics import f1_score, precision_score, recall_score, accuracy_score, classification_report, accuracy_score
+from sklearn.metrics import  roc_auc_score
+# multilabel_confusion_matrix, confusion_matrix, , top_k_accuracy_score, classification_report
 from torch import nn
 
 from transformers import (
@@ -39,12 +41,28 @@ from transformers import (
     Trainer,
     TrainingArguments,
     set_seed,
+    TrainerCallback
 )
 from utils_ner_refact import NerDataset, Split, get_labels, TrainerWithLog
 
+from transformers.integrations import TensorBoardCallback
+# from transformers.integrations import TensorBoardCallback
 
+import torch
 logger = logging.getLogger(__name__)
+import tensorflow as tf
 
+from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
+
+import pandas as pd
+import torch
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
+from transformers import BertTokenizer, BertConfig
+
+from keras.preprocessing.sequence import pad_sequences
+from sklearn.utils import shuffle
+
+from seqeval.metrics import f1_score, accuracy_score
 
 @dataclass
 class ModelArguments:
@@ -105,16 +123,6 @@ class DataTrainingArguments:
     )
 
 
-def check_overwrite_output_dir(training_args):
-    if (
-        os.path.exists(training_args.output_dir)
-        and os.listdir(training_args.output_dir)
-        and training_args.do_train
-        and not training_args.overwrite_output_dir
-    ):
-        raise ValueError(f"Output directory ({training_args.output_dir}) already exists and is not empty. Use --overwrite_output_dir to overcome.")
-
-
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
@@ -128,10 +136,9 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    if check_overwrite_output_dir(training_args):
-        print()
-
-
+    training_args.gradient_accumulation_steps = 16
+    training_args.eval_steps = 32
+    training_args.save_steps = 32
 
     # Setup logging
     logging.basicConfig(
@@ -154,13 +161,10 @@ def main():
     set_seed(training_args.seed)
 
     # Prepare CONLL-2003 task
-    print(data_args.labels)
     labels = get_labels(data_args.labels)
 
-    print(labels)
-
     label_map: Dict[int, str] = {i: label for i, label in enumerate(labels)}
-    print(label_map)
+    print('Entities: ',label_map)
     num_labels = len(labels)
 
     # Load pretrained model and tokenizer
@@ -257,29 +261,73 @@ def main():
         preds_list, out_label_list = align_predictions(p.predictions, p.label_ids)
         # print('p.predictions ', len(p.predictions[0]))
         # print('p.label_ids ', len(p.label_ids[0]))
-        print('len(label_ids)', len(preds_list))
-        print('len(predictions) ', len(out_label_list))
-
+        # print('len(label_ids)', len(preds_list))
+        # print('len(predictions) ', len(out_label_list))
+        # precision = precision_score(out_label_list, preds_list)
+        # print(precision)
         return {
             "precision": precision_score(out_label_list, preds_list),
             "recall": recall_score(out_label_list, preds_list),
             "f1": f1_score(out_label_list, preds_list),
+            # classification_report, accuracy_score
+            "accuracy": accuracy_score(out_label_list, preds_list),
+            # "multilabel_confusion_matrix": multilabel_confusion_matrix(out_label_list, preds_list, labels=["B", "I", "O"]),
+            # "confusion_matrix": confusion_matrix(out_label_list, preds_list),
+
+            # "multilabel_confusion_matrix": multilabel_confusion_matrix(out_label_list, preds_list),
+            # "balanced_accuracy_score": balanced_accuracy_score(out_label_list, preds_list),
+            # "roc_auc_score": roc_auc_score(out_label_list, preds_list),
+            # "top_k_accuracy_score": top_k_accuracy_score(out_label_list, preds_list),
+            "classification_report": classification_report(out_label_list, preds_list)
         }
 
+    # tensorboard_callback.on_evaluate
+
+    class TensorBoardCallback(TrainerCallback):
+        "A callback that prints a message at the beginning of training"
+
+        def on_log(self, args, state, control, logs, **kwargs):
+            print("Training on log")
+            # print(args)
+            print(state)
+            print('logs ', logs)
+            # print('kwargs.metrics() ', kwargs.pop('metrics'))
+            # print('kwargs.logs() ', kwargs.pop('logs'))
+
+        #
+        # def on_epoch_end(self, args, state, control, logs=None, **kwargs):
+        #     print("on_epoch_end ---------------------------")
+        #     # print(args)
+        #     print(state)
+        #     print(logs)
+        #     # print(kwargs.metrics())
+        #
+        # def on_save(self, args, state, control, logs=None, **kwargs):
+        #     print("on_save ---------------------------")
+        #     # print(args)
+        #     print(state)
+        #     print(logs)
+
+# log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    # log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+    tensorboard_callback = TensorBoardCallback()
+    # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir='runs', histogram_freq=1)
+
     # Initialize our Trainer
-    trainer = TrainerWithLog(
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
 # talvez comentar isto se der erro
         compute_metrics=compute_metrics,
-        model_init=model
-        # log = 'test'
+        callbacks=[tensorboard_callback]  # We can either pass the callback class this way or an instance of it (MyCallback())
     )
-    # trainer._memory_tracker.start()
 
-    
+    # %load_ext tensorboard
+    # trainer._memory_tracker.start()
 
     # Training
     if training_args.do_train:
@@ -298,11 +346,104 @@ def main():
         # if trainer.is_world_master():
         tokenizer.save_pretrained(training_args.output_dir)
 
+    # Separa o dataframe por PONTO-FINAL
+    def separar_frases(dataframe):
+      sentences = []
+      labels = []
+
+      sentences_aux = []
+      labels_aux = []
+
+      inicio = True
+
+      for word, label in zip(dataframe.word.values, dataframe.label.values):
+        if inicio:
+            sentences_aux.append('[CLS]')
+            labels_aux.append('O')
+            inicio = False
+        sentences_aux.append(word)
+        labels_aux.append(label)
+
+        if (word == '.'):
+            sentences_aux.append('[SEP]')
+            labels_aux.append('O')
+
+            sentences.append(sentences_aux)
+            labels.append(labels_aux)
+
+            sentences_aux = []
+            labels_aux = []
+            inicio = True
+
+      return sentences, labels
+
+    # from typing import Dict
+    # from transformers import AutoConfig
+    # List, Optional, Tuple
+
+
+    # def get_labels2(path):
+    #
+    #     # path= '../../NER/ACD/labels.txt'
+    #     with open(path, "r") as f:
+    #         labels = f.read().splitlines()
+    #         labels = [i if i != 'O' else 'O' for i in labels]
+    #     if "O" not in labels:
+    #         labels = ["O"] + labels
+    #     return labels
+
+
+    def tokenize_and_preserve_labels(sentence, text_labels):
+        tokenized_sentence = []
+        labels = []
+        for word, label in zip(sentence, text_labels):
+    #         print('sentence ', word)
+            # Tokenize the word and count # of subwords the word is broken into
+    #         print(word)
+    #         break
+            tokenized_word = tokenizer.tokenize(str(word))
+            n_subwords = len(tokenized_word)
+
+            # Add the tokenized word to the final tokenized word list
+            tokenized_sentence.extend(tokenized_word)
+
+            # Add the same label to the new list of labels `n_subwords` times
+            if label.startswith("B"):
+                labels.extend([label])
+                new_label = "I-" + label[2:]
+
+                labels.extend([new_label] * (n_subwords-1))
+            else:
+                labels.extend([label] * n_subwords)
+
+
+        return tokenized_sentence, labels
+
+
     # Evaluation
     results = {}
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
 
+        # if not training_args.do_train:
+        #
+        #     # config = AutoConfig.from_pretrained(
+        #     #     os.path.join(training_args.output_dir, "checkpoint-77"),
+        #     #     num_labels=num_labels,
+        #     #     id2label=label_map,
+        #     #     label2id={label: i for i, label in enumerate(labels)},
+        #     #     cache_dir=model_args.cache_dir,
+        #     #     # block_size=128
+        #     # )
+        #     print(os.path.join(training_args.output_dir, "checkpoint-231"))
+        #     model = AutoModelForTokenClassification.from_pretrained(
+        #         os.path.join(training_args.output_dir, "checkpoint-231"),
+        #         # from_tf=bool(".ckpt" in model_args.model_name_or_path),
+        #         config=config,
+        #         # cache_dir=model_args.cache_dir,
+        #     )
+
+            # trainer.model = os.path.join(training_args.output_dir, "checkpoint-77")
         result = trainer.evaluate()
 
         output_eval_file = os.path.join(training_args.output_dir, "eval_results.txt")
