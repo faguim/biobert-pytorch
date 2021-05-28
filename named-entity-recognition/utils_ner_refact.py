@@ -19,16 +19,22 @@
 import logging
 import os
 import pdb
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
 from enum import Enum
 from typing import List, Optional, Union
 
 from filelock import FileLock
 
-from transformers import PreTrainedTokenizer, is_tf_available, is_torch_available
-
+from transformers.integrations import default_hp_search_backend
+# from transformers.integrations import TensorBoardCallback
+from transformers import AutoModelForTokenClassification, PreTrainedTokenizer, is_tf_available, is_torch_available, Trainer, TrainingArguments, EvalPrediction
 
 logger = logging.getLogger(__name__)
+
+from typing import Dict
+from transformers.trainer_utils import TrainerMemoryTracker
+# from transformers import finetuning_utils
 
 
 @dataclass
@@ -60,175 +66,132 @@ class InputFeatures:
     token_type_ids: Optional[List[int]] = None
     label_ids: Optional[List[int]] = None
 
+import torch
+from torch import nn
+from torch.utils.data.dataset import Dataset
 
 class Split(Enum):
     train = "train_dev"
     dev = "devel"
     test = "test"
 
+@dataclass
+class NerDataset(Dataset):
+    """
+    This will be superseded by a framework-agnostic approach
+    soon.
+    """
 
-if is_torch_available():
-    import torch
-    from torch import nn
-    from torch.utils.data.dataset import Dataset
+    features: List[InputFeatures]
+    pad_token_label_id: int = nn.CrossEntropyLoss().ignore_index
+    # Use cross entropy ignore_index as padding label id so that only
+    # real label ids contribute to the loss later.
 
-    class NerDataset(Dataset):
-        """
-        This will be superseded by a framework-agnostic approach
-        soon.
-        """
-
-        features: List[InputFeatures]
-        pad_token_label_id: int = nn.CrossEntropyLoss().ignore_index
-        # Use cross entropy ignore_index as padding label id so that only
-        # real label ids contribute to the loss later.
-
-        def __init__(
-            self,
-            data_dir: str,
-            tokenizer: PreTrainedTokenizer,
-            labels: List[str],
-            model_type: str,
-            max_seq_length: Optional[int] = None,
-            overwrite_cache=False,
-            mode: Split = Split.train,
-        ):
-            # Load data features from cache or dataset file
-            cached_features_file = os.path.join(
-                data_dir, "cached_{}_{}_{}".format(mode.value, tokenizer.__class__.__name__, str(max_seq_length)),
-            )
-
+    def __init__(
+        self,
+        data_dir: str,
+        tokenizer: PreTrainedTokenizer,
+        labels: List[str],
+        model_type: str,
+        max_seq_length: Optional[int] = None,
+        overwrite_cache=False,
+        mode: Split = Split.train,
+        # sentences: List[List[str]] = None
+    ):
+        # Load data features from cache or dataset file
+        cached_features_file = os.path.join(
+            data_dir, "cached_{}_{}_{}".format(mode.value, tokenizer.__class__.__name__, str(max_seq_length)),
+        )
             # Make sure only the first process in distributed training processes the dataset,
-            # and the others will use the cache.
-            lock_path = cached_features_file + ".lock"
-            with FileLock(lock_path):
+        # and the others will use the cache.
+        lock_path = cached_features_file + ".lock"
+        with FileLock(lock_path):
 
-                if os.path.exists(cached_features_file) and not overwrite_cache:
-                    logger.info(f"Loading features from cached file {cached_features_file}")
-                    self.features = torch.load(cached_features_file)
-                else:
-                    logger.info(f"Creating features from dataset file at {data_dir}")
-                    examples = read_examples_from_file(data_dir, mode)
-                    # TODO clean up all this to leverage built-in features of tokenizers
-                    self.features = convert_examples_to_features(
-                        examples,
-                        labels,
-                        max_seq_length,
-                        tokenizer,
-                        cls_token_at_end=bool(model_type in ["xlnet"]),
-                        # xlnet has a cls token at the end
-                        cls_token=tokenizer.cls_token,
-                        cls_token_segment_id=2 if model_type in ["xlnet"] else 0,
-                        sep_token=tokenizer.sep_token,
-                        sep_token_extra=False,
-                        # roberta uses an extra separator b/w pairs of sentences, cf. github.com/pytorch/fairseq/commit/1684e166e3da03f5b600dbb7855cb98ddfcd0805
-                        pad_on_left=bool(tokenizer.padding_side == "left"),
-                        pad_token=tokenizer.pad_token_id,
-                        pad_token_segment_id=tokenizer.pad_token_type_id,
-                        pad_token_label_id=self.pad_token_label_id,
-                    )
-                    logger.info(f"Saving features into cached file {cached_features_file}")
-                    torch.save(self.features, cached_features_file)
-
-        def __len__(self):
-            return len(self.features)
-
-        def __getitem__(self, i) -> InputFeatures:
-            return self.features[i]
-
-
-if is_tf_available():
-    import tensorflow as tf
-
-    class TFNerDataset:
-        """
-        This will be superseded by a framework-agnostic approach
-        soon.
-        """
-
-        features: List[InputFeatures]
-        pad_token_label_id: int = -1
-        # Use cross entropy ignore_index as padding label id so that only
-        # real label ids contribute to the loss later.
-
-        def __init__(
-            self,
-            data_dir: str,
-            tokenizer: PreTrainedTokenizer,
-            labels: List[str],
-            model_type: str,
-            max_seq_length: Optional[int] = None,
-            overwrite_cache=False,
-            mode: Split = Split.train,
-        ):
-            examples = read_examples_from_file(data_dir, mode)
-            # TODO clean up all this to leverage built-in features of tokenizers
-            self.features = convert_examples_to_features(
-                examples,
-                labels,
-                max_seq_length,
-                tokenizer,
-                cls_token_at_end=bool(model_type in ["xlnet"]),
-                # xlnet has a cls token at the end
-                cls_token=tokenizer.cls_token,
-                cls_token_segment_id=2 if model_type in ["xlnet"] else 0,
-                sep_token=tokenizer.sep_token,
-                sep_token_extra=False,
-                # roberta uses an extra separator b/w pairs of sentences, cf. github.com/pytorch/fairseq/commit/1684e166e3da03f5b600dbb7855cb98ddfcd0805
-                pad_on_left=bool(tokenizer.padding_side == "left"),
-                pad_token=tokenizer.pad_token_id,
-                pad_token_segment_id=tokenizer.pad_token_type_id,
-                pad_token_label_id=self.pad_token_label_id,
-            )
-
-            def gen():
-                for ex in self.features:
-                    if ex.token_type_ids is None:
-                        yield (
-                            {"input_ids": ex.input_ids, "attention_mask": ex.attention_mask},
-                            ex.label_ids,
-                        )
-                    else:
-                        yield (
-                            {
-                                "input_ids": ex.input_ids,
-                                "attention_mask": ex.attention_mask,
-                                "token_type_ids": ex.token_type_ids,
-                            },
-                            ex.label_ids,
-                        )
-
-            if "token_type_ids" not in tokenizer.model_input_names:
-                self.dataset = tf.data.Dataset.from_generator(
-                    gen,
-                    ({"input_ids": tf.int32, "attention_mask": tf.int32}, tf.int64),
-                    (
-                        {"input_ids": tf.TensorShape([None]), "attention_mask": tf.TensorShape([None])},
-                        tf.TensorShape([None]),
-                    ),
-                )
+            if os.path.exists(cached_features_file) and not overwrite_cache:
+                logger.info(f"Loading features from cached file {cached_features_file}")
+                self.features = torch.load(cached_features_file)
             else:
-                self.dataset = tf.data.Dataset.from_generator(
-                    gen,
-                    ({"input_ids": tf.int32, "attention_mask": tf.int32, "token_type_ids": tf.int32}, tf.int64),
-                    (
-                        {
-                            "input_ids": tf.TensorShape([None]),
-                            "attention_mask": tf.TensorShape([None]),
-                            "token_type_ids": tf.TensorShape([None]),
-                        },
-                        tf.TensorShape([None]),
-                    ),
+                logger.info(f"Creating features from dataset file at {data_dir}")
+                examples = read_examples_from_file(data_dir, mode)
+                # print('-------------------------------------')
+                # print(examples[0])
+                # TODO clean up all this to leverage built-in features of tokenizers
+                self.features = convert_examples_to_features(
+                    examples,
+                    labels,
+                    max_seq_length,
+                    tokenizer,
+                    cls_token_at_end=bool(model_type in ["xlnet"]),
+                    # xlnet has a cls token at the end
+                    cls_token=tokenizer.cls_token,
+                    cls_token_segment_id=2 if model_type in ["xlnet"] else 0,
+                    sep_token=tokenizer.sep_token,
+                    sep_token_extra=False,
+                    # roberta uses an extra separator b/w pairs of sentences, cf. github.com/pytorch/fairseq/commit/1684e166e3da03f5b600dbb7855cb98ddfcd0805
+                    pad_on_left=bool(tokenizer.padding_side == "left"),
+                    pad_token=tokenizer.pad_token_id,
+                    pad_token_segment_id=tokenizer.pad_token_type_id,
+                    pad_token_label_id=self.pad_token_label_id,
                 )
+                logger.info(f"Saving features into cached file {cached_features_file}")
+                torch.save(self.features, cached_features_file)
 
-        def get_dataset(self):
-            return self.dataset
+    def __len__(self):
+        return len(self.features)
 
-        def __len__(self):
-            return len(self.features)
+    def __getitem__(self, i) -> InputFeatures:
+        return self.features[i]
 
-        def __getitem__(self, i) -> InputFeatures:
-            return self.features[i]
+
+
+@dataclass
+class TrainerWithLog(Trainer):
+    def __init__(
+        self,
+        model: AutoModelForTokenClassification,
+        args: TrainingArguments,
+        train_dataset: NerDataset,
+        eval_dataset: NerDataset,
+        # # talvez comentar isto se der erro
+
+        # model_init: Callable[[], PreTrainedModel] = None,
+        compute_metrics: Optional[EvalPrediction],
+        # model_init: Optional[AutoModelForTokenClassification],
+
+        # hp_search_backend:  Optional[str],
+        # hp_search_backend:  Optional[TrainerMemoryTracker]= field(
+        #     default=None,
+        #     metadata={"help": "."},
+        # ),
+        # _memory_tracker:  Optional[TrainerMemoryTracker]= field(
+        #     default=None,
+        #     metadata={"help": "."},
+        # ),
+    ):
+        print()
+        # self.model_init = finetuning_utils.model_init
+
+        self.model = model
+        self.model_init = self.model
+
+        # _memory_tracker = TrainerMemoryTracker()
+        # print(_memory_tracker.skip_memory_metrics)
+        self._memory_tracker = args.skip_memory_metrics
+        self._memory_tracker = TrainerMemoryTracker(args.skip_memory_metrics)
+        self._memory_tracker.start()
+
+        self.hp_search_backend = default_hp_search_backend()
+
+        self.args = args
+
+
+    def log(self, logs: Dict[str, float]) -> None:
+        print(logs)
+        logSave = open('lossoutput.txt', 'a')
+        logSave.write(str(output) + '\n')
+        logSave.close()
+
+
 
 
 def read_examples_from_file(data_dir, mode: Union[Split, str]) -> List[InputExample]:
@@ -392,6 +355,7 @@ def convert_examples_to_features(
 
 
 def get_labels(path: str) -> List[str]:
+    # print()
     if path:
         with open(path, "r") as f:
             labels = f.read().splitlines()
