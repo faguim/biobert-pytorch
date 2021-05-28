@@ -217,7 +217,7 @@ def main():
             model_type=config.model_type,
             max_seq_length=data_args.max_seq_length,
             overwrite_cache=data_args.overwrite_cache,
-            mode=Split.dev,
+            mode=Split.test,
             # sentences = []
         )
         if training_args.do_eval
@@ -287,10 +287,9 @@ def main():
         "A callback that prints a message at the beginning of training"
 
         def on_log(self, args, state, control, logs, **kwargs):
-            print("Training on log")
+            print("TensorBoard Zon log")
             # print(args)
             print(state)
-            print('logs ', logs)
             # print('kwargs.metrics() ', kwargs.pop('metrics'))
             # print('kwargs.logs() ', kwargs.pop('logs'))
 
