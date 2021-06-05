@@ -27,9 +27,10 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from seqeval.metrics import f1_score, precision_score, recall_score, accuracy_score, classification_report, accuracy_score
-from sklearn.metrics import  roc_auc_score
-# multilabel_confusion_matrix, confusion_matrix, , top_k_accuracy_score, classification_report
+from sklearn.metrics import roc_auc_score, multilabel_confusion_matrix, confusion_matrix, top_k_accuracy_score
+# classification_report
 from torch import nn
+from sklearn.preprocessing import MultiLabelBinarizer
 
 from transformers import (
     AutoConfig,
@@ -136,9 +137,10 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    training_args.gradient_accumulation_steps = 16
-    training_args.eval_steps = 32
-    training_args.save_steps = 32
+    training_args.learning_rate = 1e-05
+    # training_args.gradient_accumulation_steps = 16
+    # training_args.eval_steps = 32
+    # training_args.save_steps = 32
 
     # Setup logging
     logging.basicConfig(
@@ -232,46 +234,79 @@ def main():
         out_label_list = [[] for _ in range(batch_size)]
         preds_list = [[] for _ in range(batch_size)]
 
+        labels = list(label_map.items())
+
+        matrix = [[0 for x in labels] for pred_labels in labels]
         for i in range(batch_size):
             for j in range(seq_len):
-                # print(str('label_ids['+ str(i)+', '+ str(j) +'] '), label_ids[i, j])
-                # print(nn.CrossEntropyLoss().ignore_index)
                 if label_ids[i, j] != nn.CrossEntropyLoss().ignore_index:
                     out_label_list[i].append(label_map[label_ids[i][j]])
+                    preds_list[i].append(label_map[preds[i][j]])
+                    # out_label_list[i].append(label_map[label_ids[i][j]])
                     # print(label_map[label_ids[i][j]])
                     # print('--------------------------------------------------preds')
 
                     # print(preds[i][j])
-                    preds_list[i].append(label_map[preds[i][j]])
-                else:
-                    out_label_list[i].append('O')
-                    preds_list[i].append('O')
+                    matrix[label_ids[i][j]][preds[i][j]] +=1
+                    # preds_list[i].append(label_map[preds[i][j]])
+                # else:
+                #     out_label_list[i].append('O')
+                #     preds_list[i].append('O')
+            # if i==0 or i==1:
+            #     print(matrix)
+            #     # print(eval_dataset[0])
+            #     print()
+            #     print('reais',out_label_list[i][:])
+            #     print('hipoteses',preds_list[i][:])
 
-        # print('-------------------------------------------------')
-        # print(type(out_label_list))
-        # print(type(preds_list))
 
-        # print('out_label_list[0] ',out_label_list[0])
-        # print('preds_list[0] ', preds_list[0])
+                # break
+            # break
 
-        return preds_list, out_label_list
+        print(matrix)
+        # print(preds_list, out_label_list)
+        return preds_list, out_label_list, matrix
 
 
     def compute_metrics(p: EvalPrediction) -> Dict:
-        preds_list, out_label_list = align_predictions(p.predictions, p.label_ids)
+
+        preds_list, out_label_list, matrix = align_predictions(p.predictions, p.label_ids)
+
+        # real_labels = list(label_map.items())
+        # print(preds_list[0])
+        # print(out_label_list[0])
+        # for sentence in preds_list:
+        #     for label in sentence:
+        #         print(label)
+        #         if (label == )
         # print('p.predictions ', len(p.predictions[0]))
         # print('p.label_ids ', len(p.label_ids[0]))
         # print('len(label_ids)', len(preds_list))
         # print('len(predictions) ', len(out_label_list))
         # precision = precision_score(out_label_list, preds_list)
         # print(precision)
+
+        # multi_preds_list = []
+        # multi_out_label_list = []
+        # for out in out_label_list:
+        #     multi_out_label_list.append(MultiLabelBinarizer().fit_transform(out))
+        #
+        # for pred in preds_list:
+        #     multi_preds_list.append(MultiLabelBinarizer().fit_transform(pred))
+        #
+        # print(len(multi_preds_list))
+        # print(multi_out_label_list)
+
         return {
             "precision": precision_score(out_label_list, preds_list),
             "recall": recall_score(out_label_list, preds_list),
             "f1": f1_score(out_label_list, preds_list),
             # classification_report, accuracy_score
             "accuracy": accuracy_score(out_label_list, preds_list),
-            # "multilabel_confusion_matrix": multilabel_confusion_matrix(out_label_list, preds_list, labels=["B", "I", "O"]),
+            "matrix": matrix,
+
+
+            # "multilabel_confusion_matrix": multilabel_confusion_matrix(multi_out_label_list, multi_preds_list, labels=["B", "I", "O"]),
             # "confusion_matrix": confusion_matrix(out_label_list, preds_list),
 
             # "multilabel_confusion_matrix": multilabel_confusion_matrix(out_label_list, preds_list),
@@ -284,10 +319,10 @@ def main():
     # tensorboard_callback.on_evaluate
 
     class TensorBoardCallback(TrainerCallback):
-        "A callback that prints a message at the beginning of training"
+    #     "A callback that prints a message at the beginning of training"
 
         def on_log(self, args, state, control, logs, **kwargs):
-            print("TensorBoard Zon log")
+            # print("TensorBoard Zon log")
             # print(args)
             print(state)
             # print('kwargs.metrics() ', kwargs.pop('metrics'))
