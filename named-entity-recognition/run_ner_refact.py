@@ -137,7 +137,7 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    training_args.learning_rate = 1e-05
+    training_args.learning_rate = 1e-04
     # training_args.gradient_accumulation_steps = 16
     # training_args.eval_steps = 32
     # training_args.save_steps = 32

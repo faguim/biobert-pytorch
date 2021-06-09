@@ -1,0 +1,16 @@
+pip install transformers
+pip install seqeval
+pip install torch
+pip install tensorflow
+conda install cudatoolkit
+
+cd SageMaker/biobert-pytorch/named-entity-recognition/
+
+export DATA_DIR=../datasets/NER
+export ENTITY=NCBI-disease
+
+./preprocess-refact.sh
+
+python run_ner_refact.py     --data_dir ${DATA_DIR}/${ENTITY}     --labels ${DATA_DIR}/${ENTITY}/labels.txt     --model_name_or_path dmis-lab/biobert-base-cased-v1.1     --output_dir output/${ENTITY}     --max_seq_length 128              --seed 1     --overwrite_output  --per_device_train_batch_size 64    --per_device_eval_batch_size 64 --save_strategy no --logging_strategy epoch --evaluation_strategy epoch --do_train --do_eval --num_train_epochs 50
+
+python run_ner_refact.py     --data_dir ${DATA_DIR}/${ENTITY}     --labels ${DATA_DIR}/${ENTITY}/labels.txt       --output_dir output/${ENTITY}     --max_seq_length 128               --seed 1     --overwrite_output       --logging_strategy epoch --save_strategy no --evaluation_strategy epoch --model_name_or_path dmis-lab/biobert-base-cased-v1.1    --per_device_eval_batch_size 64 --per_device_train_batch_size 64   --do_eval  --do_train --num_train_epochs 35   
