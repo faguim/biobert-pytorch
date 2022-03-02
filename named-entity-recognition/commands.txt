@@ -1,1 +1,13 @@
-python run_ner_refact.py     --data_dir ${DATA_DIR}/${ENTITY}     --labels ${DATA_DIR}/${ENTITY}/labels.txt       --output_dir output/${ENTITY}     --max_seq_length 128               --seed 1  --do_eval   --overwrite_output       --logging_strategy epoch --save_strategy no --evaluation_strategy epoch --model_name_or_path dmis-lab/biobert-base-cased-v1.1    --per_device_eval_batch_size 4 --per_device_train_batch_size 4 --do_train --num_train_epochs 3   
+pip install transformer==3.0.0
+pip install seqeval
+pip install torch
+pip install pandas
+
+cd named-entity-recognition
+
+./preprocess-refact.sh 
+
+export DATA_DIR=../datasets/NER
+export ENTITY=ACD
+
+python run_ner_refact.py     --data_dir ${DATA_DIR}/${ENTITY}     --labels ${DATA_DIR}/${ENTITY}/labels.txt       --output_dir output/${ENTITY}     --max_seq_length 128               --seed 1  --do_eval   --overwrite_output       --logging_strategy epoch --save_strategy no --evaluation_strategy epoch --model_name_or_path dmis-lab/biobert-base-cased-v1.1    --per_device_eval_batch_size 4 --per_device_train_batch_size 4 --do_train --num_train_epochs 1   

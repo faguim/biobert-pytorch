@@ -1,12 +1,10 @@
-# BioBERT for Named Entity Recognition
+# Nhenga Natural Language Inference
 
-To train an NER model with BioBERT-v1.1 (base), run the command below.
-Before training, please run `./preprocess.sh` to preprocess the datasets downloaded in `biobert-pytorch` (see [here](https://github.com/jhyuklee/biobert-pytorch)).
+To train an NLI model with BioBERT-v1.1 (base), run the command below.
+
 
 ## Additional Requirements
 - seqeval : Used for NER evaluation (`pip install seqeval`)
-pip install torch
-pip install sentence_transformers
 
 ## Training
 ```bash
@@ -20,7 +18,7 @@ export SAVE_STEPS=1000
 export ENTITY=NCBI-disease
 export SEED=1
 
-python run_ner.py \
+python finetuning-local.py \
     --data_dir ${DATA_DIR}/${ENTITY}/ \
     --labels ${DATA_DIR}/${ENTITY}/labels.txt \
     --model_name_or_path dmis-lab/biobert-base-cased-v1.1 \

@@ -26,14 +26,14 @@ from typing import List, Optional, Union
 
 from filelock import FileLock
 
-from transformers.integrations import default_hp_search_backend
+# from transformers.integrations import default_hp_search_backend
 # from transformers.integrations import TensorBoardCallback
 from transformers import AutoModelForTokenClassification, PreTrainedTokenizer, is_tf_available, is_torch_available, Trainer, TrainingArguments, EvalPrediction
 
 logger = logging.getLogger(__name__)
 
 from typing import Dict
-from transformers.trainer_utils import TrainerMemoryTracker
+# from transformers.trainer_utils import TrainerMemoryTracker
 # from transformers import finetuning_utils
 
 
@@ -177,10 +177,10 @@ class TrainerWithLog(Trainer):
         # _memory_tracker = TrainerMemoryTracker()
         # print(_memory_tracker.skip_memory_metrics)
         self._memory_tracker = args.skip_memory_metrics
-        self._memory_tracker = TrainerMemoryTracker(args.skip_memory_metrics)
+        # self._memory_tracker = TrainerMemoryTracker(args.skip_memory_metrics)
         self._memory_tracker.start()
 
-        self.hp_search_backend = default_hp_search_backend()
+        # self.hp_search_backend = default_hp_search_backend()
 
         self.args = args
 

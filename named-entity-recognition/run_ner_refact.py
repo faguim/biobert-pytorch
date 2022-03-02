@@ -42,11 +42,11 @@ from transformers import (
     Trainer,
     TrainingArguments,
     set_seed,
-    TrainerCallback
+    # TrainerCallback
 )
 from utils_ner_refact import NerDataset, Split, get_labels, TrainerWithLog
 
-from transformers.integrations import TensorBoardCallback
+# from transformers.integrations import TensorBoardCallback
 # from transformers.integrations import TensorBoardCallback
 
 import torch
@@ -64,6 +64,8 @@ from keras.preprocessing.sequence import pad_sequences
 from sklearn.utils import shuffle
 
 from seqeval.metrics import f1_score, accuracy_score
+
+# from transformers import Adafactor, get_linear_schedule_with_warmup
 
 @dataclass
 class ModelArguments:
@@ -137,7 +139,7 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    training_args.learning_rate = 1e-05
+    training_args.learning_rate = 5e-05
     # training_args.gradient_accumulation_steps = 16
     # training_args.eval_steps = 32
     # training_args.save_steps = 32
@@ -318,15 +320,15 @@ def main():
 
     # tensorboard_callback.on_evaluate
 
-    class TensorBoardCallback(TrainerCallback):
-    #     "A callback that prints a message at the beginning of training"
-
-        def on_log(self, args, state, control, logs, **kwargs):
-            # print("TensorBoard Zon log")
-            # print(args)
-            print(state)
-            # print('kwargs.metrics() ', kwargs.pop('metrics'))
-            # print('kwargs.logs() ', kwargs.pop('logs'))
+    # class TensorBoardCallback(TrainerCallback):
+    # #     "A callback that prints a message at the beginning of training"
+    #
+    #     def on_log(self, args, state, control, logs, **kwargs):
+    #         # print("TensorBoard Zon log")
+    #         # print(args)
+    #         print(state)
+    #         # print('kwargs.metrics() ', kwargs.pop('metrics'))
+    #         # print('kwargs.logs() ', kwargs.pop('logs'))
 
         #
         # def on_epoch_end(self, args, state, control, logs=None, **kwargs):
@@ -346,9 +348,16 @@ def main():
     # log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-    tensorboard_callback = TensorBoardCallback()
+    # tensorboard_callback = TensorBoardCallback()
     # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir='runs', histogram_freq=1)
 
+
+    # optimizer = Adafactor(model.parameters(), scale_parameter=False, relative_step=False, warmup_init=False, lr=2e-5)
+
+    #scheduler = get_linear_schedule_with_warmup(
+    #    optimizer, num_warmup_steps=3,
+    #    num_training_steps=training_args.max_steps
+    #)
     # Initialize our Trainer
     trainer = Trainer(
         model=model,
@@ -357,7 +366,8 @@ def main():
         eval_dataset=eval_dataset,
 # talvez comentar isto se der erro
         compute_metrics=compute_metrics,
-        callbacks=[tensorboard_callback]  # We can either pass the callback class this way or an instance of it (MyCallback())
+        # callbacks=[tensorboard_callback],  # We can either pass the callback class this way or an instance of it (MyCallback())
+        # optimizers = (optimizer, scheduler)
     )
 
     # %load_ext tensorboard
