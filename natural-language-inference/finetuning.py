@@ -22,7 +22,7 @@ pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension
 word_embedding_model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
 word_embedding_model.save(OUTPUT_MODEL)
 
-num_epochs = 1
+num_epochs = 15
 train_batch_size = 2
 
 
@@ -57,6 +57,7 @@ train_batch_size = 2
 logging.info("Read STSbenchmark train dataset")
 
 sts_dataset_path = '../datasets/NLI/snli_1.0/'
+sts_dataset_path = '../datasets/NLI/mednli/'
 
 print('Read NLIbenchmark train dataset')
 
@@ -65,9 +66,13 @@ dev_samples = []
 test_samples = []
 
 i = 0
+# with open(DATASET + 'mli_train_v1.jsonl', "r") as f:
 with open(DATASET + 'snli_1.0_train.txt', "r") as f:
 #     labels = f.readlines()
 #     print(f.readlines())
+    # json_list = list(f)
+    # print(jsonlist)
+
     reader = csv.DictReader(f, delimiter='\t', quoting=csv.QUOTE_NONE)
 
     for row in reader:
@@ -98,7 +103,11 @@ with open(DATASET + 'snli_1.0_train.txt', "r") as f:
 #             train_samples.append(inp_example)
         # i+=1
 
-with open(DATASET + 'snli_1.0_test.txt', "r") as f:
+
+with open(DATASET + 'mli_test_v1.jsonl', "r") as f:
+# with open(DATASET + 'snli_1.0_test.txt', "r") as f:
+
+
     reader = csv.DictReader(f, delimiter='\t', quoting=csv.QUOTE_NONE)
     for row in reader:
         gold_label = row['gold_label']  # Normalize score to range 0 ... 1
@@ -116,14 +125,14 @@ with open(DATASET + 'snli_1.0_test.txt', "r") as f:
         test_samples.append(inp_example)
 
 print(len(test_samples))
-# print('Primeiro: ')
-# for t in train_samples:
-#     print(t)
-# print(train_samples[0])
-# with gzip.open(sts_dataset_path, 'rt', encoding='utf8') as fIn:
-# reader = csv.DictReader(fIn, delimiter='\t', quoting=csv.QUOTE_NONE)
+print('Primeiro: ')
+for t in train_samples:
+    print(t)
+print(train_samples[0])
+with gzip.open(sts_dataset_path, 'rt', encoding='utf8') as fIn:
+reader = csv.DictReader(fIn, delimiter='\t', quoting=csv.QUOTE_NONE)
 
-# print(word_embedding_model.fc1(x).size())
+print(word_embedding_model.fc1(x).size())
 
 
 import math
@@ -132,7 +141,7 @@ from sentence_transformers import losses
 
 from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator
 
-train_dataloader = DataLoader(train_samples, shuffle=True, batch_size=train_batch_size)
+train_dataloader = DataLoader(train_samples[:100000], shuffle=True, batch_size=train_batch_size)
 # train_dataloader = DataLoader(train_samples[:80000], shuffle=True, batch_size=train_batch_size)
 train_loss = losses.CosineSimilarityLoss(model=word_embedding_model)
 

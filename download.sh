@@ -4,18 +4,8 @@
 # LICENSE file in the root directory of this source tree.
 
 set -e
+export TRAIN_PATH=dataset/train1.0.json
+export DEV_PATH=dataset/dev1.0.json
+export TEST_PATH=dataset/test1.0.json
 
-# Configure download location
-DOWNLOAD_PATH="$BIOBERT_DATA"
-if [ "$BIOBERT_DATA" == "" ]; then
-    echo "BIOBERT_DATA not set; downloading to default path ('data')."
-    DOWNLOAD_PATH="./data"
-fi
-DOWNLOAD_PATH_TAR="$DOWNLOAD_PATH.tar.gz"
-
-# Download datasets
-wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1cGqvAm9IZ_86C4Mj7Zf-w9CFilYVDl8j' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1cGqvAm9IZ_86C4Mj7Zf-w9CFilYVDl8j" -O "$DOWNLOAD_PATH_TAR" && rm -rf /tmp/cookies.txt
-tar -xvzf "$DOWNLOAD_PATH_TAR"
-rm "$DOWNLOAD_PATH_TAR"
-
-echo "BioBERT dataset download done!"
+python3 dataset-code/describe_data.py -train_file TRAIN_PATH -dev_file DEV_PATH -test_file TEST_PATH

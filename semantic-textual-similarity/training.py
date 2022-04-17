@@ -5,6 +5,30 @@ import csv, logging, math
 # from sentence_transformers import , SentenceTransformer, util, InputExample
 from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator
 
+logger = logging.getLogger(__name__)
+
+learning_rate = 5e-05
+# training_args.gradient_accumulation_steps = 16
+# training_args.eval_steps = 32
+# training_args.save_steps = 32
+
+# Setup logging
+# logging.basicConfig(
+#     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+#     datefmt="%m/%d/%Y %H:%M:%S",
+#     level=logging.INFO if training_args.local_rank in [-1, 0] else logging.WARN,
+# )
+# logger.warning(
+#     "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
+#     training_args.local_rank,
+#     training_args.device,
+#     training_args.n_gpu,
+#     bool(training_args.local_rank != -1),
+#     training_args.fp16,
+#     # training_args.per_device_eval_batch_size
+# )
+# logger.info("Training/evaluation parameters %s", training_args)
+
 #### Just some code to print debug information to stdout
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
@@ -17,7 +41,7 @@ print(str(n_gpu)+ ' '+ str(device) + ' Device available: '+ torch.cuda.get_devic
 torch.cuda.empty_cache()
 
 max_seq_length = 128
-num_epochs = 30
+num_epochs = 1
 train_batch_size = 2
 
 
@@ -61,7 +85,7 @@ dev_evaluator = EmbeddingSimilarityEvaluator.from_input_examples(dev_samples, na
 train_dataloader = DataLoader(train_samples, shuffle=True, batch_size=train_batch_size)
 train_loss = losses.MultipleNegativesRankingLoss(model)
 
-warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.1) #10% of train data for warm-up
+warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.05) #10% of train data for warm-up
 logging.info("Warmup steps: {}".format(warmup_steps))
 
 print(10*len(train_dataloader))

@@ -1,5 +1,5 @@
 # Nhenga Natural Language Inference
-
+# A model to train the transformer network on a
 To train an NLI model with BioBERT-v1.1 (base), run the command below.
 
 

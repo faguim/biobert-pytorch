@@ -1,0 +1,4 @@
+cd app/natural-language-inference
+
+pip install torch
+pip install sentence_transformers

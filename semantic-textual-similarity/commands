@@ -1,0 +1,4 @@
+cd app/semantic-textual-similarity
+
+pip install torch
+pip install sentence_transformers

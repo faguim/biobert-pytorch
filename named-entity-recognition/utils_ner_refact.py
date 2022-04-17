@@ -36,6 +36,9 @@ from typing import Dict
 # from transformers.trainer_utils import TrainerMemoryTracker
 # from transformers import finetuning_utils
 
+import torch
+from torch import nn
+from torch.utils.data.dataset import Dataset
 
 @dataclass
 class InputExample:
@@ -66,13 +69,11 @@ class InputFeatures:
     token_type_ids: Optional[List[int]] = None
     label_ids: Optional[List[int]] = None
 
-import torch
-from torch import nn
-from torch.utils.data.dataset import Dataset
+
 
 class Split(Enum):
-    train = "train_dev"
-    dev = "devel"
+    train = "train"
+    eval = "devel"
     test = "test"
 
 @dataclass
@@ -168,7 +169,6 @@ class TrainerWithLog(Trainer):
         #     metadata={"help": "."},
         # ),
     ):
-        print()
         # self.model_init = finetuning_utils.model_init
 
         self.model = model
@@ -186,7 +186,6 @@ class TrainerWithLog(Trainer):
 
 
     def log(self, logs: Dict[str, float]) -> None:
-        print(logs)
         logSave = open('lossoutput.txt', 'a')
         logSave.write(str(output) + '\n')
         logSave.close()

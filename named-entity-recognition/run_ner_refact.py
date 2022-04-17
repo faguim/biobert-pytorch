@@ -42,12 +42,9 @@ from transformers import (
     Trainer,
     TrainingArguments,
     set_seed,
-    # TrainerCallback
+    TrainerCallback
 )
 from utils_ner_refact import NerDataset, Split, get_labels, TrainerWithLog
-
-# from transformers.integrations import TensorBoardCallback
-# from transformers.integrations import TensorBoardCallback
 
 import torch
 logger = logging.getLogger(__name__)
@@ -87,6 +84,9 @@ class ModelArguments:
     # or just modify its tokenizer_config.json.
     cache_dir: Optional[str] = field(
         default=None, metadata={"help": "Where do you want to store the pretrained models downloaded from s3"}
+    )
+    do_test: bool = field(
+        default=False, metadata={"help": "Perform evaluation in test set"}
     )
 
 
@@ -139,7 +139,7 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    training_args.learning_rate = 5e-05
+    training_args.learning_rate = 2e-05
     # training_args.gradient_accumulation_steps = 16
     # training_args.eval_steps = 32
     # training_args.save_steps = 32
@@ -159,7 +159,7 @@ def main():
         training_args.fp16,
         # training_args.per_device_eval_batch_size
     )
-    logger.info("Training/evaluation parameters %s", training_args)
+    # logger.info("Training/evaluation parameters %s", training_args)
 
     # Set seed
     set_seed(training_args.seed)
@@ -176,7 +176,7 @@ def main():
     # Distributed training:
     # The .from_pretrained methods guarantee that only one local process can concurrently
     # download model & vocab.
-
+    print('Moooooooooooodelo: ', model_args.model_name_or_path)
     config = AutoConfig.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
         num_labels=num_labels,
@@ -185,6 +185,7 @@ def main():
         cache_dir=model_args.cache_dir,
         # block_size=128
     )
+    print(model_args.tokenizer_name)
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
@@ -221,10 +222,25 @@ def main():
             model_type=config.model_type,
             max_seq_length=data_args.max_seq_length,
             overwrite_cache=data_args.overwrite_cache,
-            mode=Split.test,
+            mode=Split.eval,
             # sentences = []
         )
         if training_args.do_eval
+        else None
+    )
+
+    test_dataset = (
+        NerDataset(
+            data_dir=data_args.data_dir,
+            tokenizer=tokenizer,
+            labels=labels,
+            model_type=config.model_type,
+            max_seq_length=data_args.max_seq_length,
+            overwrite_cache=data_args.overwrite_cache,
+            mode=Split.test,
+            # sentences = []
+        )
+        if model_args.do_test
         else None
     )
 
@@ -237,67 +253,24 @@ def main():
         preds_list = [[] for _ in range(batch_size)]
 
         labels = list(label_map.items())
-
+        print(labels)
         matrix = [[0 for x in labels] for pred_labels in labels]
         for i in range(batch_size):
+            # print('8')
             for j in range(seq_len):
                 if label_ids[i, j] != nn.CrossEntropyLoss().ignore_index:
+                    # print('jjjjjjjjjjjjjjjjjjjjjjjjjjjj: ',label_ids[i, j])
                     out_label_list[i].append(label_map[label_ids[i][j]])
                     preds_list[i].append(label_map[preds[i][j]])
-                    # out_label_list[i].append(label_map[label_ids[i][j]])
-                    # print(label_map[label_ids[i][j]])
-                    # print('--------------------------------------------------preds')
-
-                    # print(preds[i][j])
+                    # print('linha: ',label_ids[i][j])
+                    # print('coluna', preds[i][j])
                     matrix[label_ids[i][j]][preds[i][j]] +=1
-                    # preds_list[i].append(label_map[preds[i][j]])
-                # else:
-                #     out_label_list[i].append('O')
-                #     preds_list[i].append('O')
-            # if i==0 or i==1:
-            #     print(matrix)
-            #     # print(eval_dataset[0])
-            #     print()
-            #     print('reais',out_label_list[i][:])
-            #     print('hipoteses',preds_list[i][:])
-
-
-                # break
-            # break
-
-        print(matrix)
-        # print(preds_list, out_label_list)
         return preds_list, out_label_list, matrix
 
 
     def compute_metrics(p: EvalPrediction) -> Dict:
 
         preds_list, out_label_list, matrix = align_predictions(p.predictions, p.label_ids)
-
-        # real_labels = list(label_map.items())
-        # print(preds_list[0])
-        # print(out_label_list[0])
-        # for sentence in preds_list:
-        #     for label in sentence:
-        #         print(label)
-        #         if (label == )
-        # print('p.predictions ', len(p.predictions[0]))
-        # print('p.label_ids ', len(p.label_ids[0]))
-        # print('len(label_ids)', len(preds_list))
-        # print('len(predictions) ', len(out_label_list))
-        # precision = precision_score(out_label_list, preds_list)
-        # print(precision)
-
-        # multi_preds_list = []
-        # multi_out_label_list = []
-        # for out in out_label_list:
-        #     multi_out_label_list.append(MultiLabelBinarizer().fit_transform(out))
-        #
-        # for pred in preds_list:
-        #     multi_preds_list.append(MultiLabelBinarizer().fit_transform(pred))
-        #
-        # print(len(multi_preds_list))
-        # print(multi_out_label_list)
 
         return {
             "precision": precision_score(out_label_list, preds_list),
@@ -306,11 +279,8 @@ def main():
             # classification_report, accuracy_score
             "accuracy": accuracy_score(out_label_list, preds_list),
             "matrix": matrix,
-
-
             # "multilabel_confusion_matrix": multilabel_confusion_matrix(multi_out_label_list, multi_preds_list, labels=["B", "I", "O"]),
             # "confusion_matrix": confusion_matrix(out_label_list, preds_list),
-
             # "multilabel_confusion_matrix": multilabel_confusion_matrix(out_label_list, preds_list),
             # "balanced_accuracy_score": balanced_accuracy_score(out_label_list, preds_list),
             # "roc_auc_score": roc_auc_score(out_label_list, preds_list),
@@ -318,47 +288,11 @@ def main():
             "classification_report": classification_report(out_label_list, preds_list)
         }
 
-    # tensorboard_callback.on_evaluate
-
-    # class TensorBoardCallback(TrainerCallback):
-    # #     "A callback that prints a message at the beginning of training"
-    #
-    #     def on_log(self, args, state, control, logs, **kwargs):
-    #         # print("TensorBoard Zon log")
-    #         # print(args)
-    #         print(state)
-    #         # print('kwargs.metrics() ', kwargs.pop('metrics'))
-    #         # print('kwargs.logs() ', kwargs.pop('logs'))
-
-        #
-        # def on_epoch_end(self, args, state, control, logs=None, **kwargs):
-        #     print("on_epoch_end ---------------------------")
-        #     # print(args)
-        #     print(state)
-        #     print(logs)
-        #     # print(kwargs.metrics())
-        #
-        # def on_save(self, args, state, control, logs=None, **kwargs):
-        #     print("on_save ---------------------------")
-        #     # print(args)
-        #     print(state)
-        #     print(logs)
-
-# log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    # log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-    # tensorboard_callback = TensorBoardCallback()
-    # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir='runs', histogram_freq=1)
 
 
-    # optimizer = Adafactor(model.parameters(), scale_parameter=False, relative_step=False, warmup_init=False, lr=2e-5)
 
-    #scheduler = get_linear_schedule_with_warmup(
-    #    optimizer, num_warmup_steps=3,
-    #    num_training_steps=training_args.max_steps
-    #)
-    # Initialize our Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -379,9 +313,7 @@ def main():
         # print(training_args)
         # trainer.resize_token_embeddings(len(tokenizer))
 
-        trainer.train(
-            model_path=model_args.model_name_or_path if os.path.isdir(model_args.model_name_or_path) else None
-        )
+        trainer.train(model_path=model_args.model_name_or_path if os.path.isdir(model_args.model_name_or_path) else None)
         trainer.save_model()
 
         # json.dump(model_config,open(os.path.join("out_base","model_config.json"),"w"))
@@ -396,7 +328,7 @@ def main():
       labels = []
 
       sentences_aux = []
-      labels_aux = []
+      labels_aux = []-do_eval
 
       inicio = True
 
@@ -465,28 +397,39 @@ def main():
 
 
     # Evaluation
-    results = {}
+    eval_results = {}
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
 
         # if not training_args.do_train:
-        #
-        #     # config = AutoConfig.from_pretrained(
-        #     #     os.path.join(training_args.output_dir, "checkpoint-77"),
-        #     #     num_labels=num_labels,
-        #     #     id2label=label_map,
-        #     #     label2id={label: i for i, label in enumerate(labels)},
-        #     #     cache_dir=model_args.cache_dir,
-        #     #     # block_size=128
-        #     # )
-        #     print(os.path.join(training_args.output_dir, "checkpoint-231"))
-        #     model = AutoModelForTokenClassification.from_pretrained(
-        #         os.path.join(training_args.output_dir, "checkpoint-231"),
-        #         # from_tf=bool(".ckpt" in model_args.model_name_or_path),
-        #         config=config,
-        #         # cache_dir=model_args.cache_dir,
-        #     )
 
+            # config = AutoConfig.from_pretrained(
+            #     os.path.join(training_args.output_dir, "checkpoint-77"),
+            #     num_labels=num_labels,
+            #     id2label=label_map,
+            #     label2id={label: i for i, label in enumerate(labels)},
+            #     cache_dir=model_args.cache_dir,
+            #     # block_size=128
+            # )
+            # print(os.path.join(training_args.output_dir, "checkpoint-1237"))
+            # trainer.model = AutoModelForTokenClassification.from_pretrained(
+            #     os.path.join(training_args.output_dir, "checkpoint-18555"),
+            #     # from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            #     config=config,
+            #     # cache_dir=model_args.cache_dir,
+            # )
+
+            # trainer.eval_dataset = test_dataset
+            # result = trainer.evaluate(test_dataset)
+            # print(result)
+            # output_test_file = os.path.join(training_args.output_dir,"test_results.txt")
+            # with open(output_test_file, "w") as writer:
+            #     logger.info("***** Test results *****")
+            #     for key, value in result.items():
+            #         logger.info("  %s = %s", key, value)
+            #         writer.write("%s = %s\n" % (key, value))
+            #
+            # results.update(result)
             # trainer.model = os.path.join(training_args.output_dir, "checkpoint-77")
         result = trainer.evaluate()
 
@@ -498,7 +441,24 @@ def main():
                 logger.info("  %s = %s", key, value)
                 writer.write("%s = %s\n" % (key, value))
 
-        results.update(result)
+        eval_results.update(result)
+
+
+    test_results = {}
+    if model_args.do_test:
+        logger.info("*** Testing ***")
+
+        result = trainer.evaluate(test_dataset)
+        output_test_file = os.path.join(training_args.output_dir,"test_results.txt")
+        with open(output_test_file, "w") as writer:
+            logger.info("***** Test results *****")
+            for key, value in result.items():
+                logger.info("  %s = %s", key, value)
+                writer.write("%s = %s\n" % (key, value))
+
+        test_results.update(result)
+
+
 
 
     # Predict
@@ -560,7 +520,7 @@ def main():
                         )
 
 
-    return results
+    # return results
 
 
 def _mp_fn(index):
