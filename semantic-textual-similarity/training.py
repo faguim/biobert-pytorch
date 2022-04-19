@@ -41,7 +41,7 @@ print(str(n_gpu)+ ' '+ str(device) + ' Device available: '+ torch.cuda.get_devic
 torch.cuda.empty_cache()
 
 max_seq_length = 128
-num_epochs = 1
+num_epochs = 30
 train_batch_size = 2
 
 
@@ -100,6 +100,6 @@ model.fit(train_objectives=[(train_dataloader, train_loss)],
           save_best_model = True,
           # use_amp=use_amp,
           checkpoint_path=OUTPUT_MODEL,
-          checkpoint_save_steps=10*len(train_dataloader),
-          checkpoint_save_total_limit=3
+          # checkpoint_save_steps=10*len(train_dataloader),
+          # checkpoint_save_total_limit=3
           )
